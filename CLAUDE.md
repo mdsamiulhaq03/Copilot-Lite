@@ -28,13 +28,14 @@ Intern project: a two-agent assistant for the Maveric platform. The **Generic Ag
 | Dummy Error Log API | FastAPI, one endpoint: `GET /v1/tenants/{tenant_id}/baselines/logs/errors`, returns the 3 logs from `/mock-logs` as a JSON array |
 | Router | Keyword check (error, failure, log, crash), then a Groq yes/no check ("is the user reporting a problem?") only on a keyword hit |
 | Vector store | ChromaDB, local and persistent |
-| Embeddings | `BAAI/bge-small-en-v1.5` (local, 384-dim, 512-token limit). Not all-MiniLM-L6-v2: it truncates at 256 tokens |
+| Embeddings | `BAAI/bge-small-en-v1.5` (local, 384-dim, 512-token limit), run through `fastembed` (ONNX Runtime, no PyTorch) via LangChain's `FastEmbedEmbeddings`. Model downloaded at Docker build time; ingestion runs offline. Not all-MiniLM-L6-v2: it truncates at 256 tokens |
+| RAG components | LangChain throughout: `MarkdownHeaderTextSplitter` + our own small function for the size cap, whole tables and breadcrumbs; `langchain-chroma` `Chroma`; `BM25Retriever`; `EnsembleRetriever` for RRF (c=60, equal weights). In LangChain 1.0 `EnsembleRetriever` may have moved to `langchain-classic`: check, and fall back to ~10 lines of our own RRF if needed. Turn off ChromaDB telemetry and make sure LangSmith tracing is off (no outside calls) |
 | Chunking | Split at `##` / `###` headings; cap ~350–400 tokens by splitting at paragraphs with 1–2 sentence overlap; keep tables and code blocks whole (an oversized table is split by rows with its header row repeated); prepend a breadcrumb `[folder/file.md > H1 > H2]` to every chunk |
 | Retrieval | Hybrid: ChromaDB vector top-10 + `rank_bm25` keyword top-10, merged with Reciprocal Rank Fusion (`1/(60+rank)`), keep top 4. The BM25 index is built in memory at agent startup from `collection.get()`, so ChromaDB stays the only store |
 | Interface | Command-line chat (`docker compose run --rm agents`) |
 | Chat memory | Last 3 question/answer turns, kept in a Python list in memory only and cleared when the chat ends (nothing written to disk, so the "no persistence" rule holds). Follow-ups are rewritten into a standalone question by Groq before `rag_search`, and routing is sticky: a follow-up stays with the agent that handled the previous turn |
 
-ChromaDB's built-in hybrid Search API was Chroma Cloud only when this was decided, which would break the local-only rule. When building ingestion, check whether the installed `chromadb` supports it locally; if so, raise it with the user as an option.
+ChromaDB's built-in hybrid Search API is Chroma Cloud only. Checked with chromadb 1.5.9: `collection.search()` raises "Search is not implemented for Local Chroma". So we use LangChain's `EnsembleRetriever` (from `langchain_classic.retrievers`); `BM25Retriever` comes from `langchain_community.retrievers`. fastembed's bge-small is the quantized ONNX copy `Qdrant/bge-small-en-v1.5-onnx-Q` (67 MB).
 
 ## Fallback behaviour
 
@@ -51,18 +52,31 @@ Fail loudly at startup, fail gracefully at runtime, never make things up.
 
 ## Planned layout
 
-Not created yet. Folder names marked * are fixed by the guide.
+Chosen by the user (option A): the main Python app lives in `backend/`; the folders the guide names (marked *) stay at the root, and so does each separate service.
 
 ```
-knowledge/*          KB_V2 unzipped: 15 folders, 88 docs, plus MANIFEST.md (not ingested)
-mock-logs/*          3 error log JSON files (e.g. BDT engine timeout, missing CSV, worker crash)
-dummy-api/           FastAPI app
-mcp-server/*         fastmcp server with fetch_error_logs
-ingestion/           chunk → embed → ChromaDB
-agents/              generic, debugger, router, rag (hybrid search), cli
-docker-compose.yml          dummy-api, mcp-server, agents
-docker-compose.ingest.yml   one-off ingestion job that exits
-.env.example         GROQ_API_KEY, GROQ_MODEL, service URLs
+backend/                     ingestion + RAG + agents: one requirements.txt, one Dockerfile, one image
+  app/
+    core/config.py           all env settings in one place
+    rag/chunker.py           headings, ~400 tokens, tables whole, breadcrumb
+    rag/embeddings.py        loads bge-small
+    rag/vector_store.py      ChromaDB connection
+    rag/hybrid_search.py     BM25 + RRF (step 2)
+    rag/tools.py             rag_search tool (step 3)
+    agents/                  generic, debugger, router (steps 3, 4, 7)
+    cli.py                   terminal chat (step 3)
+  scripts/ingest.py          one-off ingestion job (python -m scripts.ingest)
+  tests/                     optional, later
+  requirements.txt
+  Dockerfile
+dummy-api/                   FastAPI service (step 5)
+mcp-server/*                 fastmcp server with fetch_error_logs (step 6)
+mock-logs/*                  3 error log JSON files (step 5)
+knowledge/*                  KB_V2 unzipped: 15 folders, 88 docs, plus MANIFEST.md (not ingested); git-ignored
+docker-compose.yml           dummy-api, mcp-server, agents (backend image)
+docker-compose.ingest.yml    one-off ingestion job using the backend image
+.env.example                 GROQ_API_KEY, GROQ_MODEL, service URLs
+README.md
 ```
 
 ## Build order
@@ -78,11 +92,13 @@ The user chose to build RAG first and the Debugger last. They are new to MCP, so
 7. Debugger Agent as MCP client + sticky routing
 8. `docker-compose.yml` for everything + README
 
-Commit after each step. requirements.txt: one per service folder, only direct dependencies, pinned with `==`, saved as UTF-8.
+Commit after each step. requirements.txt: one per service (`backend/`, `dummy-api/`, `mcp-server/`), only direct dependencies, pinned with `==`, saved as UTF-8.
 
 ## Knowledge base facts
 
 - 253k words; files range from 97 to 16,268 words (median 1,220). 87 of 88 have `##` headings; 55 have tables; 41 have code blocks. The longest single section is 3,633 words, so the size cap is needed.
+- Chunker result with the real bge tokenizer: 2,763 chunks, 26 to 399 tokens (median 304). Table separator rows are padded with hundreds of dashes, and the tokenizer counts every dash, so the chunker shortens them to `| --- |`. A few single table rows or code lines exceed the limit and are split by words as a last resort.
+- Embedding batch size must stay small (`EMBED_BATCH_SIZE`, default 32). Docker Desktop here has only 3.7 GB of memory, and fastembed's default batch of 256 used about 3 GB and stalled. With batch 32 and chunks sorted by length, full ingestion in Docker takes about 345 s (the earlier local run with batch 256 took 908 s).
 - Read files with `encoding="utf-8"`. Windows PowerShell 5.1 prints them garbled (`â€”` for `—`), but the files are fine.
 - `KB_V2.zip` stored its paths with backslashes; unzip it on Windows, not inside a Linux container.
 
@@ -105,4 +121,6 @@ Where the reference differs from this project, follow this project:
 
 ## Environment
 
-Windows 11; Docker 29.7. Local virtual environment: `.venv` (Python 3.13, run with `.venv\Scripts\python.exe`); the system default is Python 3.14, so don't use bare `python`. Containers pin their own Python (3.12 planned), so use Docker for running the services. Not a git repository yet.
+Windows 11; Docker 29.7. Local virtual environment: `.venv` (Python 3.13, run with `.venv\Scripts\python.exe`); the system default is Python 3.14, so don't use bare `python`. Containers pin their own Python (3.12 planned), so use Docker for running the services.
+
+Git: remote `origin` = github.com/mdsamiulhaq03/Copilot-Lite, default branch `main`. One feature branch per build step (`feat/ingestion`, `feat/hybrid-search`, ...), merged into `main` when the step works. Ignored (never committed): `.env`, `docs/`, `knowledge/`, `Copilot-lite.md`, `Copilot-lite.pdf`, the diagram, `.venv/`, Python caches. Because `knowledge/` is ignored, the README must tell readers to unzip `KB_V2.zip` into `/knowledge`.
