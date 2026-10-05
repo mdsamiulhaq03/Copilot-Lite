@@ -1,0 +1,3 @@
+# Keep Python cache files out of the image
+__pycache__/
+*.pyc
