@@ -1,0 +1,18 @@
+# Secrets: the real Groq key lives in .env. Only .env.example (fake values) is shared.
+.env
+!.env.example
+
+# Personal learning notes, not part of the submission
+docs/
+knowledge/
+
+# Guide and diagrams, kept local
+Copilot-lite.md
+Copilot-lite.pdf
+copilot-lite-diagrams.excalidraw
+
+# Python files created automatically when code or tests run
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
