@@ -2,14 +2,21 @@
 .env
 !.env.example
 
-# Personal learning notes, not part of the submission
+# Personal learning notes and step-by-step explanations, not part of the submission
 docs/
+Explanation/
+
+# Company documents: readers unzip KB_V2.zip into /knowledge themselves
 knowledge/
 
 # Guide and diagrams, kept local
 Copilot-lite.md
 Copilot-lite.pdf
 copilot-lite-diagrams.excalidraw
+
+# Created when running locally: downloaded embedding model, ChromaDB data
+.cache/
+data/
 
 # Python files created automatically when code or tests run
 __pycache__/
