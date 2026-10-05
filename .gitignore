@@ -13,6 +13,7 @@ knowledge/
 Copilot-lite.md
 Copilot-lite.pdf
 copilot-lite-diagrams.excalidraw
+Minicopilot rag.excalidraw
 
 # Created when running locally: downloaded embedding model, ChromaDB data
 .cache/
