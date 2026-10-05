@@ -37,6 +37,8 @@ class Settings:
     model_cache_dir: Path
     chunk_max_tokens: int
     embed_batch_size: int
+    search_candidates: int
+    search_top_k: int
 
 
 def load_settings() -> Settings:
@@ -50,4 +52,8 @@ def load_settings() -> Settings:
         # How many chunks the model embeds at once. Small batches keep memory low
         # (Docker has under 4 GB here); 256 needed about 3 GB and stalled.
         embed_batch_size=_env_int("EMBED_BATCH_SIZE", 32),
+        # Hybrid search: each search (meaning and words) returns this many chunks,
+        # then RRF merges the two lists and we keep the best search_top_k.
+        search_candidates=_env_int("SEARCH_CANDIDATES", 10),
+        search_top_k=_env_int("SEARCH_TOP_K", 4),
     )

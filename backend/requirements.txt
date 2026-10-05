@@ -10,3 +10,7 @@ langchain-core==1.6.6
 langchain-community==0.4.2
 langchain-chroma==1.1.0
 langchain-text-splitters==1.1.3
+langchain-classic==1.0.8
+
+# Word search (used by LangChain's BM25Retriever)
+rank-bm25==0.2.2

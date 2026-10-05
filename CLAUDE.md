@@ -99,6 +99,7 @@ Commit after each step. requirements.txt: one per service (`backend/`, `dummy-ap
 - 253k words; files range from 97 to 16,268 words (median 1,220). 87 of 88 have `##` headings; 55 have tables; 41 have code blocks. The longest single section is 3,633 words, so the size cap is needed.
 - Chunker result with the real bge tokenizer: 2,763 chunks, 26 to 399 tokens (median 304). Table separator rows are padded with hundreds of dashes, and the tokenizer counts every dash, so the chunker shortens them to `| --- |`. A few single table rows or code lines exceed the limit and are split by words as a last resort.
 - Embedding batch size must stay small (`EMBED_BATCH_SIZE`, default 32). Docker Desktop here has only 3.7 GB of memory, and fastembed's default batch of 256 used about 3 GB and stalled. With batch 32 and chunks sorted by length, full ingestion in Docker takes about 345 s (the earlier local run with batch 256 took 908 s).
+- BM25 tokenizer (`app/rag/hybrid_search.py`): lowercase words, plus a pair token next to numbers ("EPIC-8" → `epic`, `8`, `epic_8`). "epic" is in 1,328 chunks and "8" in 366, so alone they barely count; the rare pair fixes exact-code questions. Pairs of normal words ("what_is") made results worse, so they are not used. With this, "What is EPIC-8?" goes from 0/4 relevant chunks (meaning search only) to 3/4.
 - Read files with `encoding="utf-8"`. Windows PowerShell 5.1 prints them garbled (`â€”` for `—`), but the files are fine.
 - `KB_V2.zip` stored its paths with backslashes; unzip it on Windows, not inside a Linux container.
 
