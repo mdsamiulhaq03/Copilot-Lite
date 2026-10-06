@@ -90,12 +90,12 @@ docker compose down
 | `What is EPIC-8?` | Generic Agent: a short, plain answer from the docs, with a Sources line |
 | `How does the BDT Engine work?` | Generic Agent |
 | `Who won the 2022 World Cup?` | "The documentation does not cover this." |
-| `The BDT worker keeps crashing` | `Copilot (Debugger):` root cause from the logs (a Kafka setting written as `1.44e+07`) and what to do |
+| `The BDT worker keeps crashing` | `Copilot (Debugger Agent):` root cause from the logs (a Kafka setting written as `1.44e+07`) and what to do |
 | then `How do I fix it?` | A follow-up: stays with the Debugger |
 | `My training job failed, something about a CSV` | Debugger: the CSV file is missing from S3 |
 | `Why did my BDT inference run time out?` | Debugger: no free worker picked up the job |
 
-On the free Groq tier (8,000 tokens per minute), wait about a minute after a docs question.
+On the free Groq tier (8,000 tokens per minute), wait about a minute after a docs question. The free tier also allows 200,000 tokens per day; after that the chat says how long to wait.
 
 ### The services on their own
 

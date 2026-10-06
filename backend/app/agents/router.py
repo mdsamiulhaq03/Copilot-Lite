@@ -17,6 +17,8 @@ import re
 
 from langchain_core.language_models import BaseChatModel
 
+from app.core.llm import describe_error
+
 logger = logging.getLogger(__name__)
 
 GENERIC = "generic"
@@ -56,8 +58,8 @@ def is_problem_report(llm: BaseChatModel, question: str) -> bool:
                 {"role": "user", "content": question},
             ]
         )
-    except Exception:
-        logger.warning("Router check failed; sending the question to the Generic Agent", exc_info=True)
+    except Exception as error:
+        logger.warning("Router check failed (%s); using the Generic Agent", describe_error(error))
         return False
     words = str(reply.content).strip().lower().split()
     answer = words[0].strip('."!') if words else ""

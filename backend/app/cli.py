@@ -26,7 +26,7 @@ from langgraph.graph.state import CompiledStateGraph
 from app.agents.debugger import DebuggerAgent
 from app.agents.generic import build_generic_agent, handle_question
 from app.agents.memory import ChatMemory, rewrite_question
-from app.agents.router import DEBUGGER
+from app.agents.router import DEBUGGER, GENERIC
 from app.core.config import ConfigError, load_settings
 from app.core.llm import friendly_error, load_llm
 from app.rag.embeddings import load_embeddings
@@ -80,8 +80,18 @@ def answer_one(
     return answer, chosen
 
 
+def speaker(chosen: str | None) -> str:
+    """The name shown before an answer, so it is clear which agent answered."""
+    if chosen == DEBUGGER:
+        return "Copilot (Debugger Agent)"
+    if chosen == GENERIC:
+        return "Copilot (Generic Agent)"
+    return "Copilot"  # an error message: no agent answered
+
+
 def chat() -> None:
-    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(message)s")
+    # Warnings show as one short line in brackets, apart from the chat text
+    logging.basicConfig(level=logging.WARNING, format="[%(levelname)s] %(message)s")
     print("Loading the docs and the search index...")
     agent, debugger, llm = start()
     memory = ChatMemory()
@@ -104,9 +114,7 @@ def chat() -> None:
             print("Chat history cleared.")
             continue
         answer, chosen = answer_one(question, agent, debugger, llm, memory)
-        # Show which agent answered, so it is clear when the logs were checked
-        name = "Copilot (Debugger)" if chosen == DEBUGGER else "Copilot"
-        print(f"\n{name}: {answer}")
+        print(f"\n{speaker(chosen)}: {answer}")
     print("\nBye.")
 
 

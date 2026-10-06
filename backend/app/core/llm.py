@@ -12,6 +12,7 @@ retries reach the user as a plain message from friendly_error().
 from __future__ import annotations
 
 import logging
+import re
 
 import groq
 from langchain_groq import ChatGroq
@@ -26,6 +27,10 @@ REQUEST_TIMEOUT_SECONDS = 60
 RATE_LIMITED = (
     "Groq's free usage limit was reached (8,000 tokens per minute). "
     "Please wait about a minute and ask again."
+)
+DAILY_LIMIT = (
+    "Groq's free daily limit was reached (200,000 tokens per day). "
+    "Please try again in {wait}."
 )
 TOO_LARGE = (
     "This question needed more text than Groq's free limit allows at once. "
@@ -54,10 +59,37 @@ def load_llm(settings: Settings) -> ChatGroq:
     )
 
 
-def friendly_error(error: Exception) -> str:
-    """Turn a Groq error into a message for the user. The real error goes to the log."""
-    logger.warning("Groq call failed: %s: %s", type(error).__name__, error)
+# Groq's rate limit message says which limit was hit and how long to wait, e.g.
+# "... on tokens per day (TPD): Limit 200000 ... Please try again in 4m9.264s."
+WAIT_TIME = re.compile(r"try again in ((?:\d+h)?(?:\d+m)?[\d.]+s)")
 
+
+def wait_time(error: Exception) -> str:
+    """How long Groq says to wait, rounded to whole seconds ("4m9s"), or "a while"."""
+    match = WAIT_TIME.search(str(error))
+    return re.sub(r"\.\d+s$", "s", match.group(1)) if match else "a while"
+
+
+def is_daily_limit(error: Exception) -> bool:
+    return isinstance(error, groq.RateLimitError) and "tokens per day" in str(error)
+
+
+def describe_error(error: BaseException) -> str:
+    """One short line for the log instead of Groq's full error text or a traceback."""
+    if isinstance(error, groq.RateLimitError):
+        limit = "tokens per day" if is_daily_limit(error) else "tokens per minute"
+        return f"Groq rate limit ({limit}), retry in {wait_time(error)}"
+    if isinstance(error, groq.APIStatusError):
+        return f"Groq error {error.status_code} ({type(error).__name__})"
+    return f"{type(error).__name__}: {str(error)[:120]}"
+
+
+def friendly_error(error: Exception) -> str:
+    """Turn a Groq error into a message for the user. A short note goes to the log."""
+    logger.warning(describe_error(error))
+
+    if is_daily_limit(error):
+        return DAILY_LIMIT.format(wait=wait_time(error))
     if isinstance(error, groq.RateLimitError):
         return RATE_LIMITED
     if isinstance(error, (groq.APITimeoutError, groq.APIConnectionError)):

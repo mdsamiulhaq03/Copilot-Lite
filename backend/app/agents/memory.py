@@ -21,6 +21,8 @@ from dataclasses import dataclass
 
 from langchain_core.language_models import BaseChatModel
 
+from app.core.llm import describe_error
+
 logger = logging.getLogger(__name__)
 
 MAX_TURNS = 2
@@ -117,8 +119,8 @@ def rewrite_question(llm: BaseChatModel, question: str, turns: tuple[Turn, ...])
                 },
             ]
         )
-    except Exception:
-        logger.warning("Question rewrite failed; using the original question", exc_info=True)
+    except Exception as error:
+        logger.warning("Question rewrite failed (%s); using the original question", describe_error(error))
         return question
     rewritten = str(reply.content).strip().strip('"')
     return rewritten or question
