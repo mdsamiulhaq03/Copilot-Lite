@@ -5,7 +5,8 @@ Run from the backend/ folder:
 
 Each question goes through:
 1. rewrite: a follow-up becomes a standalone question (uses the last 3 turns)
-2. Generic Agent: searches the docs with rag_search and answers
+2. Generic Agent: routes it, then answers from the docs (debug questions get a
+   "Debugger not ready" reply until step 7)
 3. memory: the turn is saved, and the oldest drops off after 3
 
 Type "clear" to forget the chat so far, or "exit" to quit.
@@ -19,7 +20,7 @@ import sys
 from langchain_core.language_models import BaseChatModel
 from langgraph.graph.state import CompiledStateGraph
 
-from app.agents.generic import ask, build_generic_agent
+from app.agents.generic import build_generic_agent, handle_question
 from app.agents.memory import ChatMemory, rewrite_question
 from app.core.config import ConfigError, load_settings
 from app.core.llm import friendly_error, load_llm
@@ -28,7 +29,6 @@ from app.rag.hybrid_search import EmptyStoreError, build_hybrid_retriever
 from app.rag.tools import make_rag_search_tool
 from app.rag.vector_store import open_vector_store
 
-GENERIC = "generic"
 EXIT_WORDS = {"exit", "quit"}
 
 
@@ -53,12 +53,13 @@ def answer_one(
     if standalone != question:
         print(f"(searching for: {standalone})")
     try:
-        answer = ask(agent, standalone)
+        answer, chosen = handle_question(agent, llm, standalone)
     except Exception as error:
         # Reached only after the Groq client's own retries (see core/llm.py)
         return friendly_error(error)
-    # Save the standalone question: it gives the next rewrite clearer context
-    memory.add(standalone, answer, GENERIC)
+    # Save the standalone question: it gives the next rewrite clearer context.
+    # Which agent answered is saved too, for sticky routing in step 7.
+    memory.add(standalone, answer, chosen)
     return answer
 
 
