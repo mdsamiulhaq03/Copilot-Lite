@@ -1,0 +1,4 @@
+# Keep Python cache files and the laptop test client out of the image
+__pycache__/
+*.pyc
+try_client.py
