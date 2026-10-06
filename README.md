@@ -230,14 +230,4 @@ cd backend;    ..\.venv\Scripts\python.exe -m app.cli
 
 Test scripts (from `backend/`): `python -m scripts.search "What is EPIC-8?"`, `python -m scripts.route --samples`, `python -m scripts.debug "The worker crashed"`. From `mcp-server/`: `python try_client.py`.
 
----
 
-## Known limits
-
-- Answers on very technical topics can still include technical terms, even though the prompt asks for plain words.
-- The model sometimes adds a meaning for an abbreviation that the docs do not give (rare after the prompt fixes).
-- The Debugger answers a follow-up like "How do I fix it?" with the full diagnosis again, not only the fix steps. Correct, but longer than needed.
-- The Debugger sometimes adds its own unit conversion of a number from the log (e.g. "14400000 (for 4 hours)").
-- The Dummy API returns the same 3 logs for every tenant.
-- A problem report with none of the 4 keywords (for example "the job stopped halfway") goes to the Generic Agent.
-- Chat memory (last 3 turns) lives only in memory and is gone when the chat ends, by design: no persistence beyond the vector store.
