@@ -1,0 +1,8 @@
+# MCP server framework (Streamable HTTP transport)
+fastmcp==4.0.11
+
+# Calls the Dummy Error Log API
+httpx==0.28.1
+
+# Request/response types for the /health route (fastmcp is built on it)
+starlette==1.7.0
