@@ -1,0 +1,52 @@
+# Runs the whole Copilot Lite: Dummy Error Log API, MCP server and the agents.
+#
+# First load the docs into ChromaDB once (see docker-compose.ingest.yml), then:
+#   docker compose up -d --build          # start the Dummy API and the MCP server
+#   docker compose run --rm agents        # open the chat
+#   docker compose down                   # stop everything
+#
+# Inside this network the services reach each other by name:
+#   agents ──MCP──► mcp-server:8002 ──HTTP──► dummy-api:8001
+name: copilot-lite
+
+services:
+  dummy-api:
+    build: ./dummy-api
+    image: copilot-lite-dummy-api
+    volumes:
+      - ./mock-logs:/mock-logs:ro # the 3 error logs, read-only
+    ports:
+      - "8001:8001" # open on the laptop too, to try it at http://localhost:8001/docs
+
+  mcp-server:
+    build: ./mcp-server
+    image: copilot-lite-mcp-server
+    environment:
+      DUMMY_API_URL: http://dummy-api:8001
+    ports:
+      - "8002:8002" # open on the laptop too, for try_client.py or the MCP Inspector
+    depends_on:
+      dummy-api:
+        condition: service_healthy # wait until the Dummy API answers /health
+
+  agents:
+    build: ./backend
+    image: copilot-lite-backend
+    command: ["python", "-m", "app.cli"]
+    # The chat reads what you type, so it needs a terminal
+    stdin_open: true
+    tty: true
+    # GROQ_API_KEY and GROQ_MODEL come from the project's .env file
+    env_file: .env
+    # These win over .env, so the Docker addresses are always used here
+    environment:
+      MCP_SERVER_URL: http://mcp-server:8002/mcp
+      LANGSMITH_TRACING: "false"
+    volumes:
+      - ./data/chroma:/data/chroma # the vector store that ingestion filled
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+    # Only started by "docker compose run --rm agents", not by "docker compose up",
+    # because the chat needs your terminal
+    profiles: ["chat"]

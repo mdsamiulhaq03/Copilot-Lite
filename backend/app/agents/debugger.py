@@ -16,6 +16,7 @@ import groq
 from langchain.agents import create_agent
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import ToolMessage
 from langchain_core.tools import BaseTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.graph.state import CompiledStateGraph
@@ -33,6 +34,10 @@ LOGS_UNAVAILABLE = (
     "Sorry, I could not fetch the error logs right now, so I cannot check what went "
     "wrong. Please try again in a moment."
 )
+NOT_CHECKED = (
+    "Sorry, I did not manage to check the error logs for this question. Please "
+    "describe the problem again, for example: \"the BDT worker keeps crashing\"."
+)
 
 SYSTEM_PROMPT = """You are the Debugger Agent of NetAI Copilot Lite. A user reports a \
 problem with the Maveric platform. You find the root cause from the error logs and \
@@ -46,6 +51,8 @@ names another tenant.
 Using the logs:
 - Base the root cause only on what the logs show. You may use general technical \
 knowledge to explain it and to suggest a fix, but never invent log details.
+- Copy numbers and settings exactly as the log writes them. Do not convert them \
+into other units (like milliseconds into seconds or hours) unless the log does.
 - The logs may hold several errors. Pick the ones that match what the user describes. \
 If the user asks about the errors in general, cover each one briefly.
 - If the tool result starts with "ERROR", tell the user you could not fetch the logs \
@@ -114,7 +121,13 @@ class DebuggerAgent:
             # MCP server down or unreachable: fail gracefully, never make things up
             logger.warning("Debugger could not reach the MCP server: %s", root_cause(error))
             return LOGS_UNAVAILABLE
-        return tidy(str(result["messages"][-1].content))
+        messages = result["messages"]
+        # Guard: an answer written without reading the logs is a guess. In testing,
+        # follow-ups were sometimes answered from nothing, with invented details.
+        if not any(isinstance(m, ToolMessage) and m.name == LOG_TOOL for m in messages):
+            logger.warning("Debugger answered without fetching the logs; answer dropped")
+            return NOT_CHECKED
+        return tidy(str(messages[-1].content))
 
     def ask(self, question: str) -> str:
         """Diagnose one problem report and return the answer."""
