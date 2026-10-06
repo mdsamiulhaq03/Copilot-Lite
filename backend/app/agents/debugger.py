@@ -69,8 +69,8 @@ proves it.
 What to do: at most 3 short steps, starting with "- ".
 
 Plain text only: no ** or backticks, no headings with #. Keep it short. Leave out \
-stack traces and long IDs, because they confuse a non-technical reader. End with one \
-short line offering more detail, like: "Want the technical details from the log?\""""
+stack traces and long IDs, because they confuse a non-technical reader. End with the \
+last step. Do not add a question or an offer of more help at the end."""
 
 
 def root_cause(error: BaseException) -> str:

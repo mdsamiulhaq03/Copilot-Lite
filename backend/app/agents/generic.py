@@ -67,7 +67,7 @@ table or field names, HTTP status codes, port numbers, standard or spec numbers,
 parameter names, code, or file names. These confuse a non-technical reader.
 - Use simple everyday words to say what the docs say. Simplify; do not add new facts.
 - Plain text only: no ** or backticks, no headings. Start bullet points with "- ".
-- End with one short line offering more detail, like: "Want the technical details?"
+- End with the last key idea. Do not add a question or an offer of more help at the end.
 - Do not write a Sources line or citation marks like 【1】. Sources are added for you.
 
 The shape of a good answer (the words in <> are placeholders, not facts):
@@ -76,8 +76,6 @@ The shape of a good answer (the words in <> are placeholders, not facts):
 - <key idea, one short sentence>
 - <key idea, one short sentence>
 - <key idea, one short sentence>
-
-Want the technical details?
 
 If the user asks for technical details, give them, still in plain text and still \
 only from the search results.

@@ -114,7 +114,7 @@ Both services are also open on the laptop while they run:
 
 ![How each question is routed](images/routing.png)
 
-1. **Rewrite:** a follow-up ("how many stories does it have?") is rewritten into a full question using the last 2 turns.
+1. **Rewrite:** a follow-up ("how many stories does it have?") is rewritten into a full question using the last 2 turns. Only a message with a pointing word (it, its, this, that, these, those, they, them, their, one) is sent to the rewriter; any other message is kept exactly as typed.
 2. **Sticky routing:** if the question was rewritten, it is a follow-up, so it goes to the agent that answered last.
 3. **Router** (new questions): a keyword check (`error`, `fail`, `log`, `crash`). Only on a keyword hit, a short Groq yes/no check: "is the user reporting a problem?". So "What does the error handling module do?" stays with the Generic Agent.
 
