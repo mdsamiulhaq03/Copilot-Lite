@@ -29,6 +29,11 @@ logger = logging.getLogger(__name__)
 
 _WORD = re.compile(r"\w+")
 
+# Reciprocal Rank Fusion: each chunk gets 1 / (RRF_C + rank) from each search.
+# 60 is the standard value. Equal weights: meaning search and word search count the same.
+RRF_C = 60
+RRF_WEIGHTS = [0.5, 0.5]
+
 
 class EmptyStoreError(Exception):
     """ChromaDB has no chunks, so there is nothing to search."""
@@ -69,7 +74,7 @@ def build_hybrid_retriever(store: Chroma, settings: Settings) -> BaseRetriever:
     if not chunks:
         raise EmptyStoreError(
             "ChromaDB has no chunks. Run ingestion first: "
-            "docker compose -f docker-compose.ingest.yml up"
+            "docker compose -f docker-compose.ingest.yml run --rm --build ingest"
         )
 
     meaning = store.as_retriever(search_kwargs={"k": settings.search_candidates})
@@ -82,8 +87,7 @@ def build_hybrid_retriever(store: Chroma, settings: Settings) -> BaseRetriever:
         return meaning
 
     logger.info("Hybrid search ready: %d chunks indexed for word search", len(chunks))
-    # Equal weights: both searches count the same. c=60 is the RRF constant.
-    return EnsembleRetriever(retrievers=[meaning, words], weights=[0.5, 0.5], c=60)
+    return EnsembleRetriever(retrievers=[meaning, words], weights=RRF_WEIGHTS, c=RRF_C)
 
 
 def search(retriever: BaseRetriever, question: str, top_k: int) -> list[Document]:
