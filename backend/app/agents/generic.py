@@ -1,8 +1,9 @@
 """The Generic Agent: the front door for every question.
 
-handle_question() first runs the router (agents/router.py):
-- a debug question is handed to the Debugger Agent (step 7; for now a "not ready" reply)
-- everything else is answered from the docs
+handle_question() first decides who answers:
+- a follow-up stays with the agent that answered the last turn (sticky routing)
+- otherwise the router (agents/router.py) decides: a problem report goes to the
+  Debugger Agent (agents/debugger.py), everything else is answered from the docs
 
 Answering from the docs is a LangChain agent with one tool, rag_search:
 1. Groq reads the question and decides to call rag_search with a search query.
@@ -21,12 +22,9 @@ from langchain_core.messages import BaseMessage, ToolMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph.state import CompiledStateGraph
 
+from app.agents.debugger import DebuggerAgent
 from app.agents.router import DEBUGGER, route
-
-DEBUGGER_NOT_READY = (
-    "This looks like a problem report. The Debugger Agent, which reads the error "
-    "logs, is not ready yet. For now I can only answer questions about the docs."
-)
+from app.agents.text import tidy
 
 # Every search adds about 1,000 tokens to the next Groq request. Without a limit
 # the agent kept searching (8 times for one question) and went over the free
@@ -83,11 +81,8 @@ If the user asks for technical details, give them, still in plain text.
 Before you reply, check every abbreviation in your answer. If you wrote a meaning \
 for it that is not in the search results, remove that meaning."""
 
-# Clean-up done in code, because the model sometimes breaks these prompt rules
-CITATION_MARKS = re.compile(r"【[^】]*】")
-MODEL_SOURCES_LINE = re.compile(r"^\s*sources?:.*$", re.IGNORECASE | re.MULTILINE)
+# Finds the file names in rag_search's results, for the Sources line
 SOURCE_IN_TOOL_RESULT = re.compile(r"^\[\d+\] source: (.+)$", re.MULTILINE)
-ODD_HYPHENS = str.maketrans({"‑": "-", "‐": "-", "–": "-", "—": "-"})
 
 
 def build_generic_agent(llm: BaseChatModel, rag_search: BaseTool) -> CompiledStateGraph:
@@ -114,8 +109,7 @@ def searched_files(messages: list[BaseMessage]) -> list[str]:
 
 def clean_answer(answer: str, files: list[str]) -> str:
     """Remove what the model was told not to write, then add the Sources line."""
-    text = CITATION_MARKS.sub("", answer).translate(ODD_HYPHENS)
-    text = MODEL_SOURCES_LINE.sub("", text).replace("**", "").replace("`", "").strip()
+    text = tidy(answer)
     # No sources when the docs had no answer: the files found did not help
     if not files or NOT_COVERED in text:
         return text
@@ -130,10 +124,19 @@ def ask(agent: CompiledStateGraph, question: str) -> str:
 
 
 def handle_question(
-    agent: CompiledStateGraph, llm: BaseChatModel, question: str
+    agent: CompiledStateGraph,
+    debugger: DebuggerAgent,
+    llm: BaseChatModel,
+    question: str,
+    sticky_agent: str | None = None,
 ) -> tuple[str, str]:
-    """Route the question, then answer it. Returns (answer, which agent answered)."""
-    chosen = route(llm, question)
+    """Pick the agent, then answer. Returns (answer, which agent answered).
+
+    sticky_agent is the agent that answered the last turn, given only when this
+    question is a follow-up. "How do I fix it?" has no debug word, but after a
+    Debugger answer it must stay with the Debugger, so the router is skipped.
+    """
+    chosen = sticky_agent or route(llm, question)
     if chosen == DEBUGGER:
-        return DEBUGGER_NOT_READY, chosen
+        return debugger.ask(question), chosen
     return ask(agent, question), chosen
