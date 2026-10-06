@@ -1,0 +1,5 @@
+# Web framework for the one endpoint
+fastapi==0.142.2
+
+# Web server that runs the FastAPI app
+uvicorn==0.54.0
