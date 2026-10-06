@@ -26,7 +26,10 @@ from app.rag.chunker import Chunk, TokenCounter, chunk_document
 from app.rag.embeddings import load_embeddings, make_token_counter
 from app.rag.vector_store import add_chunks, clear_collection, count_chunks, open_vector_store
 
-BATCH_SIZE = 256
+# How many chunks go to ChromaDB in one save call (and how often progress is
+# logged). Not the embedding batch: the model still embeds EMBED_BATCH_SIZE (32)
+# chunks at a time, which is what keeps memory low.
+SAVE_BATCH_SIZE = 256
 
 logger = logging.getLogger("ingest")
 
@@ -91,8 +94,8 @@ def save_chunks(chunks: list[Chunk], settings: Settings, embeddings: Embeddings)
     store = open_vector_store(settings, embeddings)
     clear_collection(store)
     by_length = sorted(chunks, key=lambda chunk: chunk.token_count)
-    for start in range(0, len(by_length), BATCH_SIZE):
-        batch = by_length[start : start + BATCH_SIZE]
+    for start in range(0, len(by_length), SAVE_BATCH_SIZE):
+        batch = by_length[start : start + SAVE_BATCH_SIZE]
         add_chunks(store, batch)
         logger.info("Saved %d / %d chunks", start + len(batch), len(chunks))
     saved = count_chunks(store)
