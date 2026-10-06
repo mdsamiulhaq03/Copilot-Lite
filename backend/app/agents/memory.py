@@ -18,22 +18,25 @@ from langchain_core.language_models import BaseChatModel
 
 logger = logging.getLogger(__name__)
 
-MAX_TURNS = 3
+MAX_TURNS = 2
 # Answers can be long. The rewriter only needs the topic, so it gets the start of each one.
 ANSWER_PREVIEW_CHARS = 400
 
 # The examples are there because Groq kept tying new questions to the last topic:
 # "The worker crashed last night" became "...the worker for the Copilot MCP layer...".
-REWRITE_PROMPT = """You rewrite a follow-up question so it can be understood on its own.
+REWRITE_PROMPT = """You help a search tool understand follow-up questions. The search \
+tool cannot see the chat, so a message like "how many does it have?" means nothing \
+to it. Your job is to fill in the missing name, and only that.
 
-Rewrite only if the message cannot be understood without the chat history, because \
-it uses a word like "it", "that", "they", "this" or "the second one", or leaves out \
-its subject. Then replace only that word with the name it refers to. Add nothing else \
-from the history.
+When to rewrite: only when the message cannot be understood on its own, because it \
+uses a word like "it", "that", "they", "this" or "the second one", or leaves out \
+what it is about. Then swap only that word for the name it refers to. Add nothing \
+else from the chat.
 
-If the message names its own subject, return it exactly as written, word for word, \
-even if it could be related to the history. A message that reports a problem \
-(something failed, crashed or broke) is a new topic: return it unchanged.
+When to leave it alone: if the message already names what it is about, return it \
+exactly as written, word for word, even if it could be related to the chat. A message \
+that reports a problem (something failed, crashed or broke) is a new topic: return \
+it unchanged.
 
 Examples, after a chat about EPIC-8:
 - "How many stories does it have?" -> "How many stories does EPIC-8 have?"

@@ -26,12 +26,19 @@ DEBUGGER = "debugger"
 # Some normal words also match ("login", "logic"); the Groq check catches those.
 DEBUG_KEYWORDS = re.compile(r"\b(error|fail|log|crash)", re.IGNORECASE)
 
-ROUTER_PROMPT = """You decide if a user is reporting a problem with the Maveric platform.
+ROUTER_PROMPT = """You help a support desk for the Maveric platform. Read the user's message \
+and decide one thing: is the user telling us something went wrong for them?
 
-Answer "yes" if the user says something failed, crashed, errored or is not working, \
-or asks to check error logs or find out why something broke.
-Answer "no" if the user is asking how something works, what a word means, or any \
-other knowledge question, even if it mentions errors or logs.
+Answer "yes" when the user has a problem right now. For example:
+- "My training job failed last night."
+- "The engine keeps crashing, can you check the logs?"
+- "Why did my upload break?"
+
+Answer "no" when the user just wants to learn or understand something, even if the \
+message mentions errors or logs. For example:
+- "What does the error handling module do?"
+- "Where can I find the logs page?"
+- "What is a crash report?"
 
 Reply with one word only: yes or no."""
 
