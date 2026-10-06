@@ -1,0 +1,29 @@
+{
+  "error_id": "err-c41f08e7",
+  "tenant_id": "demo-tenant",
+  "service_name": "bdt-worker",
+  "severity": "critical",
+  "error_code": "KAFKA_CONSUMER_INIT_FAILED",
+  "error_message": "Failed to initialize Kafka consumer: invalid literal for int() with base 10: '1.44e+07'",
+  "error_type": "ValueError",
+  "stack_trace": "Traceback (most recent call last):\n  File \"/app/worker/main.py\", line 38, in <module>\n    consumer = build_consumer(settings)\n  File \"/app/worker/kafka_consumer.py\", line 52, in build_consumer\n    max_poll_interval_ms=int(os.environ[\"KAFKA_MAX_POLL_INTERVAL_MS\"]),\nValueError: invalid literal for int() with base 10: '1.44e+07'",
+  "context": {
+    "event": "worker_startup",
+    "pod": "bdt-worker-6c9f7d8b5-x2kqp",
+    "container_status": "CrashLoopBackOff",
+    "restart_count": 6,
+    "exit_code": 1,
+    "env": {
+      "KAFKA_MAX_POLL_INTERVAL_MS": "1.44e+07",
+      "KAFKA_SESSION_TIMEOUT_MS": "30000",
+      "KAFKA_HEARTBEAT_INTERVAL_MS": "10000"
+    },
+    "deployed_by": "helm upgrade staging-maveric_platform_bdt_worker",
+    "deployed_at": "2026-10-05T11:40:05Z"
+  },
+  "metadata": {
+    "environment": "staging"
+  },
+  "resolved": false,
+  "created_at": "2026-10-05T11:41:17Z"
+}
