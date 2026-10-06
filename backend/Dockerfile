@@ -1,4 +1,4 @@
-# Backend image: used for ingestion now, and for the agents (chat) later.
+# Backend image: the agents (chat), and the one-off ingestion job.
 FROM python:3.12-slim
 
 # No .pyc files, print logs straight away, keep pip quiet and the image small
@@ -39,5 +39,5 @@ RUN useradd --create-home appuser \
     && chown -R appuser:appuser /app /models /data
 USER appuser
 
-# Default job: ingestion. (Step 3 adds the chat command.)
-CMD ["python", "-m", "scripts.ingest"]
+# Default job: the terminal chat. (docker-compose.ingest.yml runs ingestion instead.)
+CMD ["python", "-m", "app.cli"]
