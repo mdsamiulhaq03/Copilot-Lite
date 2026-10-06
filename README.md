@@ -7,19 +7,9 @@ A two-agent assistant for the Maveric platform, run from the terminal.
 
 Everything runs locally in Docker. The only outside service is Groq (the LLM).
 
-```
-                    ┌──────────────────────── agents (backend) ────────────────────────┐
-You ─► chat (CLI) ─►│ rewrite follow-up ─► Generic Agent ─► docs question ─► rag_search │──► ChromaDB + BM25
-                    │                         │                                         │    (data/chroma)
-                    │                         └─► problem report ─► Debugger Agent      │
-                    └───────────────────────────────────────────────────│───────────────┘
-                                                                        │ MCP (Streamable HTTP)
-                                                                        ▼
-                                                       mcp-server: fetch_error_logs
-                                                                        │ HTTP
-                                                                        ▼
-                                                       dummy-api ──reads──► mock-logs/*.json
-```
+![Architecture: the agents container, the MCP server, the Dummy API and Groq](images/architecture.png)
+
+*The whole system. Solid arrows are calls inside the system; the dashed red arrow is the only call to the internet (Groq).*
 
 ---
 
@@ -118,14 +108,33 @@ Both services are also open on the laptop while they run:
 
 ### Routing
 
+![How each question is routed](images/routing.png)
+
 1. **Rewrite:** a follow-up ("how many stories does it have?") is rewritten into a full question using the last 3 turns.
 2. **Sticky routing:** if the question was rewritten, it is a follow-up, so it goes to the agent that answered last.
 3. **Router** (new questions): a keyword check (`error`, `fail`, `log`, `crash`). Only on a keyword hit, a short Groq yes/no check: "is the user reporting a problem?". So "What does the error handling module do?" stays with the Generic Agent.
 
-### Generic Agent (RAG)
+### Ingestion
+
+![Ingestion: knowledge files to chunks to embeddings to ChromaDB](images/ingestion.png)
 
 - **Chunking:** split at `##` / `###` headings, at most about 400 tokens per chunk, tables and code blocks kept whole, and a breadcrumb `[folder/file.md > H1 > H2]` at the start of every chunk.
-- **Hybrid search:** ChromaDB meaning search (top 10) + BM25 word search (top 10), merged with Reciprocal Rank Fusion; the best 4 chunks go to the agent.
+- **Embeddings:** each chunk becomes 384 numbers with `bge-small-en-v1.5`, run locally through fastembed.
+- **Storage:** ChromaDB saves the chunks in `data/chroma/` and compares them by cosine distance.
+
+### Hybrid search
+
+![Hybrid search: meaning search and word search merged with RRF](images/hybrid-search.png)
+
+- **Meaning search:** ChromaDB, top 10. Good at the same idea in different words.
+- **Word search:** BM25, top 10. Good at exact codes like `EPIC-8` or `TR-069`.
+- **Merge:** Reciprocal Rank Fusion combines the two lists; the best 4 chunks go to the agent.
+
+### Generic Agent (RAG)
+
+![Generic Agent: Groq calls rag_search, reads the chunks and writes the answer](images/generic-agent.png)
+
+- Groq reads the question and calls `rag_search`, at most 2 times per question.
 - **Answers** only from the found chunks, in plain words. Sources are added by the code from the files the search returned.
 
 ### Debugger Agent (MCP)
@@ -171,6 +180,7 @@ mcp-server/                  MCP server with fetch_error_logs (fastmcp)
 mock-logs/                   the 3 error logs
 knowledge/                   the docs (not in git: unzip KB_V2.zip here)
 data/chroma/                 the vector store (not in git: made by ingestion)
+images/                      the diagrams in this README
 docker-compose.yml           dummy-api, mcp-server, agents
 docker-compose.ingest.yml    one-off ingestion job
 .env.example                 settings to copy into .env
