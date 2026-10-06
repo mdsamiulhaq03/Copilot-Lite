@@ -22,11 +22,26 @@ MAX_TURNS = 3
 # Answers can be long. The rewriter only needs the topic, so it gets the start of each one.
 ANSWER_PREVIEW_CHARS = 400
 
+# The examples are there because Groq kept tying new questions to the last topic:
+# "The worker crashed last night" became "...the worker for the Copilot MCP layer...".
 REWRITE_PROMPT = """You rewrite a follow-up question so it can be understood on its own.
 
-Use the chat history to replace words like "it", "that", "they" or "the second one" \
-with what they refer to. If the question is already complete or starts a new topic, \
-return it unchanged. Do not answer the question. Reply with the rewritten question only."""
+Rewrite only if the message cannot be understood without the chat history, because \
+it uses a word like "it", "that", "they", "this" or "the second one", or leaves out \
+its subject. Then replace only that word with the name it refers to. Add nothing else \
+from the history.
+
+If the message names its own subject, return it exactly as written, word for word, \
+even if it could be related to the history. A message that reports a problem \
+(something failed, crashed or broke) is a new topic: return it unchanged.
+
+Examples, after a chat about EPIC-8:
+- "How many stories does it have?" -> "How many stories does EPIC-8 have?"
+- "What does S1 fix?" -> "What does S1 of EPIC-8 fix?"
+- "How does the BDT Engine work?" -> "How does the BDT Engine work?"
+- "The worker crashed last night" -> "The worker crashed last night"
+
+Do not answer the message. Reply with the rewritten message only."""
 
 
 @dataclass(frozen=True)

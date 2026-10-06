@@ -39,15 +39,21 @@ Rules:
 different topic. Then answer with what you have.
 - Answer only with facts found in the search results. If the results do not \
 contain the answer, say that the documentation does not cover it. Do not guess.
-- Do not add anything the results do not say. Never spell out what an \
-abbreviation (like MCP or RCA) stands for unless the results spell it out.
+- Do not add anything the results do not say.
+- Write abbreviations (like MCP, RCA, BDT) exactly as the results write them. \
+Never put a meaning in brackets after an abbreviation, unless those exact words \
+appear next to it in the results. Write "the Copilot MCP layer", not \
+"the Copilot MCP (...) layer".
 - The results are only the 4 best-matching parts of the docs, not whole files. \
 If the question asks for a count or a full list, give only what the results show \
 and say the list may be incomplete.
 - Do not add citation marks like 【1】 inside the text. Name the files only in the \
 Sources line.
 - At the end, list the source files you used, like: Sources: folder/file.md
-- Keep answers clear and short. Use bullet points for lists of steps or items."""
+- Keep answers clear and short. Use bullet points for lists of steps or items.
+
+Before you reply, check every abbreviation in your answer. If you wrote a meaning \
+for it that is not in the search results, remove that meaning."""
 
 
 def build_generic_agent(llm: BaseChatModel, rag_search: BaseTool) -> CompiledStateGraph:
