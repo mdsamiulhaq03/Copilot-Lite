@@ -45,6 +45,8 @@ class Settings:
     embed_batch_size: int
     search_candidates: int
     search_top_k: int
+    mcp_server_url: str
+    default_tenant_id: str
     groq_model: str
     # repr=False: the key never shows up if the settings are printed or logged
     groq_api_key: str = field(repr=False)
@@ -71,6 +73,10 @@ def load_settings() -> Settings:
         # then RRF merges the two lists and we keep the best search_top_k.
         search_candidates=_env_int("SEARCH_CANDIDATES", 10),
         search_top_k=_env_int("SEARCH_TOP_K", 4),
+        # Debugger: where the MCP server is (in Docker: http://mcp-server:8002/mcp),
+        # and which tenant's logs to fetch when the user does not name one
+        mcp_server_url=os.environ.get("MCP_SERVER_URL", "http://localhost:8002/mcp"),
+        default_tenant_id=os.environ.get("DEFAULT_TENANT_ID", "demo-tenant"),
         # No defaults: the guide says the model and key come only from env vars
         groq_model=os.environ.get("GROQ_MODEL", "").strip(),
         groq_api_key=os.environ.get("GROQ_API_KEY", "").strip(),
