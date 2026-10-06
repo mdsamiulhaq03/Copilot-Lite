@@ -9,11 +9,15 @@ graphify-out
 # Company documents: readers unzip KB_V2.zip into /knowledge themselves
 knowledge/
 
+# Working notes for the AI assistant, kept local
+CLAUDE.md
+
 # Guide and diagrams, kept local
 Copilot-lite.md
 Copilot-lite.pdf
 copilot-lite-diagrams.excalidraw
 Minicopilot rag.excalidraw
+copilot-lite-architecture.excalidraw
 
 # Created when running locally: downloaded embedding model, ChromaDB data
 .cache/
