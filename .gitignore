@@ -6,8 +6,6 @@
 docs/
 Explanation/
 graphify-out
-# Company documents: readers unzip KB_V2.zip into /knowledge themselves
-knowledge/
 
 # Working notes for the AI assistant, kept local
 CLAUDE.md

@@ -17,25 +17,29 @@ Everything runs locally in Docker. The only outside service is Groq (the LLM).
 
 - **Docker** with Docker Compose (tested with Docker 29.7 on Windows 11). About 4 GB of memory for Docker is enough.
 - A **Groq API key**: https://console.groq.com/keys (the free tier works).
-- The knowledge base zip, **`KB_V2.zip`** (not in this repo).
+
+The knowledge base (88 Markdown docs in 15 folders) is already in this repo, in `knowledge/`.
 
 ---
 
 ## Setup (once)
 
-**1. Unzip the knowledge base into `knowledge/`**
+**1. Clone the repo**
 
-The `knowledge/` folder is not in git. Unzip `KB_V2.zip` so that the 15 source folders sit directly inside it:
+```powershell
+git clone https://github.com/mdsamiulhaq03/Copilot-Lite.git
+cd Copilot-Lite
+```
+
+The docs come with it:
 
 ```
 knowledge/
 ├── copilot/
 ├── design/
 ├── ...
-└── MANIFEST.md
+└── MANIFEST.md      (an index of the docs, not loaded into the vector store)
 ```
-
-On Windows, unzip it with Windows (right-click → Extract All), not inside a Linux container: the zip stores its paths with backslashes.
 
 **2. Create `.env`**
 
@@ -110,7 +114,7 @@ Both services are also open on the laptop while they run:
 
 ![How each question is routed](images/routing.png)
 
-1. **Rewrite:** a follow-up ("how many stories does it have?") is rewritten into a full question using the last 3 turns.
+1. **Rewrite:** a follow-up ("how many stories does it have?") is rewritten into a full question using the last 2 turns.
 2. **Sticky routing:** if the question was rewritten, it is a follow-up, so it goes to the agent that answered last.
 3. **Router** (new questions): a keyword check (`error`, `fail`, `log`, `crash`). Only on a keyword hit, a short Groq yes/no check: "is the user reporting a problem?". So "What does the error handling module do?" stays with the Generic Agent.
 
@@ -178,7 +182,7 @@ backend/                     ingestion + RAG + agents (one image)
 dummy-api/                   Dummy Error Log API (FastAPI)
 mcp-server/                  MCP server with fetch_error_logs (fastmcp)
 mock-logs/                   the 3 error logs
-knowledge/                   the docs (not in git: unzip KB_V2.zip here)
+knowledge/                   the 88 docs the Generic Agent answers from
 data/chroma/                 the vector store (not in git: made by ingestion)
 images/                      the diagrams in this README
 docker-compose.yml           dummy-api, mcp-server, agents
