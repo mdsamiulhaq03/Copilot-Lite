@@ -12,9 +12,12 @@ Answering from the docs is a LangChain agent with one tool, rag_search:
 
 from __future__ import annotations
 
+import re
+
 from langchain.agents import create_agent
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import BaseMessage, ToolMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph.state import CompiledStateGraph
 
@@ -30,16 +33,22 @@ DEBUGGER_NOT_READY = (
 # tier's 8,000 tokens per minute.
 MAX_SEARCHES = 2
 
-SYSTEM_PROMPT = """You are the Generic Agent of NetAI Copilot Lite. You answer questions \
-about the Maveric platform using its documentation.
+NOT_COVERED = "The documentation does not cover this."
 
-Rules:
+# The users are customers who are not very technical, so answers lead with the
+# main idea in plain words and leave the details for a follow-up question.
+SYSTEM_PROMPT = f"""You are the Generic Agent of NetAI Copilot Lite. You answer questions \
+about the Maveric platform using its documentation. The user is not technical.
+
+Searching:
 - Always call rag_search before answering. Never answer from your own memory.
 - Search once. Search a second time only if the first results are about a \
 different topic. Then answer with what you have.
-- Answer only with facts found in the search results. If the results do not \
-contain the answer, say that the documentation does not cover it. Do not guess.
-- Do not add anything the results do not say.
+
+Facts:
+- Answer only with facts found in the search results. Do not add anything the \
+results do not say, and do not guess. If the results do not contain the answer, \
+reply with exactly this sentence and nothing else: {NOT_COVERED}
 - Write abbreviations (like MCP, RCA, BDT) exactly as the results write them. \
 Never put a meaning in brackets after an abbreviation, unless those exact words \
 appear next to it in the results. Write "the Copilot MCP layer", not \
@@ -47,13 +56,38 @@ appear next to it in the results. Write "the Copilot MCP layer", not \
 - The results are only the 4 best-matching parts of the docs, not whole files. \
 If the question asks for a count or a full list, give only what the results show \
 and say the list may be incomplete.
-- Do not add citation marks like 【1】 inside the text. Name the files only in the \
-Sources line.
-- At the end, list the source files you used, like: Sources: folder/file.md
-- Keep answers clear and short. Use bullet points for lists of steps or items.
+
+How to write the answer:
+- Start with 1 or 2 plain sentences that answer the question directly.
+- Then, only if useful, at most 4 bullet points with the key ideas. Each bullet \
+is one short sentence of at most 15 words.
+- Unless the user asks for technical details, never include: URLs or API paths, \
+table or field names, HTTP status codes, port numbers, standard or spec numbers, \
+parameter names, code, or file names.
+- Use simple everyday words to say what the docs say. Simplify; do not add new facts.
+- Plain text only: no ** or backticks, no headings. Start bullet points with "- ".
+- End with one short line offering more detail, like: "Want the technical details?"
+- Do not write a Sources line or citation marks like 【1】. Sources are added for you.
+
+The shape of a good answer (the words in <> are placeholders, not facts):
+<Name> is the part of Maveric that <what it does, in plain words>.
+
+- <key idea, one short sentence>
+- <key idea, one short sentence>
+- <key idea, one short sentence>
+
+Want the technical details?
+
+If the user asks for technical details, give them, still in plain text.
 
 Before you reply, check every abbreviation in your answer. If you wrote a meaning \
 for it that is not in the search results, remove that meaning."""
+
+# Clean-up done in code, because the model sometimes breaks these prompt rules
+CITATION_MARKS = re.compile(r"【[^】]*】")
+MODEL_SOURCES_LINE = re.compile(r"^\s*sources?:.*$", re.IGNORECASE | re.MULTILINE)
+SOURCE_IN_TOOL_RESULT = re.compile(r"^\[\d+\] source: (.+)$", re.MULTILINE)
+ODD_HYPHENS = str.maketrans({"‑": "-", "‐": "-", "–": "-", "—": "-"})
 
 
 def build_generic_agent(llm: BaseChatModel, rag_search: BaseTool) -> CompiledStateGraph:
@@ -69,10 +103,30 @@ def build_generic_agent(llm: BaseChatModel, rag_search: BaseTool) -> CompiledSta
     )
 
 
+def searched_files(messages: list[BaseMessage]) -> list[str]:
+    """The files rag_search returned during this question, in order, without repeats."""
+    files: list[str] = []
+    for message in messages:
+        if isinstance(message, ToolMessage):
+            files += SOURCE_IN_TOOL_RESULT.findall(str(message.content))
+    return list(dict.fromkeys(files))
+
+
+def clean_answer(answer: str, files: list[str]) -> str:
+    """Remove what the model was told not to write, then add the Sources line."""
+    text = CITATION_MARKS.sub("", answer).translate(ODD_HYPHENS)
+    text = MODEL_SOURCES_LINE.sub("", text).replace("**", "").replace("`", "").strip()
+    # No sources when the docs had no answer: the files found did not help
+    if not files or NOT_COVERED in text:
+        return text
+    return f"{text}\n\nSources: {', '.join(files)}"
+
+
 def ask(agent: CompiledStateGraph, question: str) -> str:
-    """Send one question to the agent and return its final answer."""
+    """Send one question to the agent and return its cleaned-up final answer."""
     result = agent.invoke({"messages": [{"role": "user", "content": question}]})
-    return result["messages"][-1].content
+    messages = result["messages"]
+    return clean_answer(str(messages[-1].content), searched_files(messages))
 
 
 def handle_question(
