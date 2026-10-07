@@ -4,7 +4,7 @@ Run from the backend/ folder:
     python -m app.cli
 
 Each question goes through:
-1. rewrite: a follow-up becomes a standalone question (uses the last 3 turns)
+1. rewrite: a follow-up becomes a standalone question (uses the last 2 turns)
 2. Generic Agent: picks the agent (a follow-up stays with the last one), then
    answers from the docs, or hands a problem report to the Debugger Agent
 3. memory: the turn is saved, and the oldest drops off after 3

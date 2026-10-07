@@ -13,9 +13,7 @@ CLAUDE.md
 # Guide and diagrams, kept local
 Copilot-lite.md
 Copilot-lite.pdf
-copilot-lite-diagrams.excalidraw
-Minicopilot rag.excalidraw
-copilot-lite-architecture.excalidraw
+*.excalidraw
 
 # Created when running locally: downloaded embedding model, ChromaDB data
 .cache/

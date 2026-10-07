@@ -114,9 +114,11 @@ Both services are also open on the laptop while they run:
 
 ![How each question is routed](images/routing.png)
 
+Every question goes to the **Generic Agent** first: it is the front door, and it decides who answers. It answers docs questions itself and forwards problem reports to the Debugger Agent.
+
 1. **Rewrite:** a follow-up ("how many stories does it have?") is rewritten into a full question using the last 2 turns. Only a message with a pointing word (it, its, this, that, these, those, they, them, their, one) is sent to the rewriter; any other message is kept exactly as typed.
 2. **Sticky routing:** if the question was rewritten, it is a follow-up, so it goes to the agent that answered last.
-3. **Router** (new questions): a keyword check (`error`, `fail`, `log`, `crash`). Only on a keyword hit, a short Groq yes/no check: "is the user reporting a problem?". So "What does the error handling module do?" stays with the Generic Agent.
+3. **Router** (new questions, used by the Generic Agent): a keyword check (`error`, `fail`, `log`, `crash`). Only on a keyword hit, a short Groq yes/no check: "is the user reporting a problem?". So "What does the error handling module do?" stays with the Generic Agent.
 
 ### Ingestion
 
