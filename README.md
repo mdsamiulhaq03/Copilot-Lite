@@ -1,11 +1,14 @@
 # NetAI Copilot Lite
 
-A two-agent assistant for the Maveric platform, run from the terminal.
+A two-agent terminal assistant for the Maveric platform: it answers questions from the platform docs and finds the root cause of failures from the error logs.
 
-- The **Generic Agent** answers questions about the platform from its documentation (RAG over 88 docs).
-- The **Debugger Agent** handles problem reports. It fetches error logs through an **MCP** tool and explains the root cause and what to do.
+![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-3776AB?logo=python&logoColor=white)
+![Docker](https://img.shields.io/badge/docker-compose-2496ED?logo=docker&logoColor=white)
+![LLM](https://img.shields.io/badge/LLM-Groq-F55036)
+![License](https://img.shields.io/badge/license-TBD-lightgrey)
+<!-- Add more badges here, for example: ![Version](https://img.shields.io/badge/version-x.y.z-blue) -->
 
-Everything runs locally in Docker. The only outside service is Groq (the LLM).
+Maveric users have two kinds of questions: "how does this part of the platform work?" and "why did my job just fail?". The first needs the right page out of 88 docs, the second needs someone to read the error logs. NetAI Copilot Lite answers both from one chat. The **Generic Agent** is the front door for every question: it answers docs questions with RAG (retrieval-augmented generation) over the knowledge base, and forwards problem reports to the **Debugger Agent**, which fetches the error logs through an **MCP** tool and explains what happened, why, and what to do. Everything runs locally in Docker; the only outside service is Groq, the LLM.
 
 ![Architecture: the agents container, the MCP server, the Dummy API and Groq](images/architecture.png)
 
@@ -13,75 +16,137 @@ Everything runs locally in Docker. The only outside service is Groq (the LLM).
 
 ---
 
-## What you need
+## Table of Contents
 
-- **Docker** with Docker Compose (tested with Docker 29.7 on Windows 11). About 4 GB of memory for Docker is enough.
-- A **Groq API key**: https://console.groq.com/keys (the free tier works).
-
-The knowledge base (88 Markdown docs in 15 folders) is already in this repo, in `knowledge/`.
+- [Features](#features)
+- [Prerequisites & Installation](#prerequisites--installation)
+- [Quick Start / Usage](#quick-start--usage)
+- [How It Works](#how-it-works)
+- [Configuration / API Reference](#configuration--api-reference)
+- [Project Layout](#project-layout)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
-## Setup (once)
+## Features
 
-**1. Clone the repo**
+- **Generic Agent as the front door:** every question goes to it first. It answers docs questions itself and forwards problem reports to the Debugger Agent.
+- **Hybrid search over the docs:** meaning search (ChromaDB) plus word search (BM25), merged with Reciprocal Rank Fusion. Finds both "same idea, different words" and exact codes like `EPIC-8`.
+- **Debugger Agent over MCP:** fetches error logs through the `fetch_error_logs` MCP tool and answers with *What happened / Why / What to do*. It has no log code of its own.
+- **Cheap, careful routing:** a free keyword check first, and a short LLM yes/no check only on a keyword hit. Follow-ups stay with the agent that answered last.
+- **No guessing:** if the docs do not cover a question, it says so. A guard in code drops any Debugger answer written without reading the logs.
+- **Fails gracefully:** clear messages for missing settings, an empty vector store, a down MCP server, and Groq rate limits.
 
-```powershell
+---
+
+## Prerequisites & Installation
+
+### What you need
+
+| Requirement | Notes |
+|---|---|
+| **Docker** with Docker Compose | Tested with Docker 29.7 on Windows 11. About 4 GB of memory for Docker is enough. |
+| **Groq API key** | Get one at https://console.groq.com/keys (the free tier works). |
+| **Python 3.12 or 3.13** | Only for running without Docker. |
+
+The knowledge base (88 Markdown docs in 15 folders) is already in this repo, in `knowledge/`.
+
+### 1. Clone the repo
+
+```bash
 git clone https://github.com/mdsamiulhaq03/Copilot-Lite.git
 cd Copilot-Lite
 ```
 
-The docs come with it:
+### 2. Create `.env`
 
-```
-knowledge/
-├── copilot/
-├── design/
-├── ...
-└── MANIFEST.md      (an index of the docs, not loaded into the vector store)
-```
-
-**2. Create `.env`**
-
-```powershell
-copy .env.example .env
+```bash
+cp .env.example .env        # Windows PowerShell: copy .env.example .env
 ```
 
 Open `.env` and set your key:
 
-```
-GROQ_API_KEY=your-real-key
+```dotenv
+GROQ_API_KEY=gsk_your_real_key
 GROQ_MODEL=openai/gpt-oss-120b
 ```
 
 `.env` is git-ignored, so the key never goes to GitHub.
 
-**3. Load the docs into the vector store (ingestion)**
+### 3. Load the docs into the vector store (ingestion)
 
-```powershell
+```bash
 docker compose -f docker-compose.ingest.yml run --rm --build ingest
 ```
 
 - Reads the 88 docs, splits them into about 2,760 chunks, embeds them with `bge-small-en-v1.5`, and saves them in ChromaDB under `data/chroma/`.
-- Runs **without any network** (`network_mode: none`): ingestion makes no outside calls. The embedding model is downloaded while the image is built.
+- Runs **without any network** (`network_mode: none`). The embedding model is downloaded while the image is built.
 - Takes about 6 minutes. Every run rebuilds the collection from scratch, so it is safe to repeat.
+
+### Running without Docker (for development)
+
+The backend and the MCP server need **separate** virtual environments: `fastmcp` 4 needs `mcp` 2.x, while `langchain-mcp-adapters` needs `mcp` below 2.0. (In Docker each service has its own image, so this does not matter there.)
+
+```powershell
+# Backend (from the project root)
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+.venv\Scripts\python.exe -m pip install -r dummy-api\requirements.txt
+
+# MCP server
+python -m venv mcp-server\.venv
+mcp-server\.venv\Scripts\python.exe -m pip install -r mcp-server\requirements.txt
+```
+
+Then run each one in its own terminal:
+
+```powershell
+cd dummy-api;  ..\.venv\Scripts\python.exe -m uvicorn main:app --port 8001
+cd mcp-server; .\.venv\Scripts\python.exe server.py
+cd backend;    ..\.venv\Scripts\python.exe -m scripts.ingest     # once
+cd backend;    ..\.venv\Scripts\python.exe -m app.cli
+```
 
 ---
 
-## Run
+## Quick Start / Usage
 
-```powershell
+Start the services, then open the chat:
+
+```bash
 docker compose up -d --build          # start the Dummy API and the MCP server
 docker compose run --rm agents        # open the chat
 ```
 
-The chat waits until both services are healthy. Type `clear` to forget the chat so far, `exit` to quit.
+The chat waits until both services are healthy. Type `clear` to forget the chat so far, `exit` to quit. When you are done:
 
-When you are done:
-
-```powershell
+```bash
 docker compose down
 ```
+
+### Example session
+
+```text
+You: What is EPIC-8?
+
+Copilot (Generic Agent): EPIC-8 is the part of the plan that adds the Copilot MCP layers ...
+
+Sources: rearchitecture/epics/EPIC-8-copilot-mcp-layers.md
+
+You: The BDT worker keeps crashing
+
+Copilot (Debugger Agent): What happened: the BDT worker stopped while starting up.
+Why: the Kafka setting KAFKA_MAX_POLL_INTERVAL_MS is written as 1.44e+07, which the worker cannot read as a whole number.
+What to do:
+- Set KAFKA_MAX_POLL_INTERVAL_MS to 14400000.
+- Restart the BDT worker.
+
+You: How do I fix it?
+(understood as: How do I fix the BDT worker crash?)
+```
+
+*(Answers are shortened here; the exact wording comes from the LLM.)*
 
 ### Things to try
 
@@ -90,25 +155,28 @@ docker compose down
 | `What is EPIC-8?` | Generic Agent: a short, plain answer from the docs, with a Sources line |
 | `How does the BDT Engine work?` | Generic Agent |
 | `Who won the 2022 World Cup?` | "The documentation does not cover this." |
-| `The BDT worker keeps crashing` | `Copilot (Debugger Agent):` root cause from the logs (a Kafka setting written as `1.44e+07`) and what to do |
-| then `How do I fix it?` | A follow-up: stays with the Debugger |
-| `My training job failed, something about a CSV` | Debugger: the CSV file is missing from S3 |
-| `Why did my BDT inference run time out?` | Debugger: no free worker picked up the job |
+| `The BDT worker keeps crashing` | Debugger Agent: root cause from the logs (a Kafka setting written as `1.44e+07`) and what to do |
+| then `How do I fix it?` | A follow-up: stays with the Debugger Agent |
+| `My training job failed, something about a CSV` | Debugger Agent: the CSV file is missing from S3 |
+| `Why did my BDT inference run time out?` | Debugger Agent: no free worker picked up the job |
 
 On the free Groq tier (8,000 tokens per minute), wait about a minute after a docs question. The free tier also allows 200,000 tokens per day; after that the chat says how long to wait.
 
-### The services on their own
+### Test scripts
 
-Both services are also open on the laptop while they run:
+```bash
+# from backend/
+python -m scripts.search "What is EPIC-8?"        # hybrid search only, no LLM
+python -m scripts.route --samples                 # which agent each sample goes to
+python -m scripts.debug "The worker crashed"      # one Debugger Agent answer
 
-| Service | Address | Try |
-|---|---|---|
-| Dummy Error Log API | http://localhost:8001 | http://localhost:8001/docs |
-| MCP server | http://localhost:8002/mcp | MCP Inspector: `npx @modelcontextprotocol/inspector`, choose "Streamable HTTP", enter the address |
+# from mcp-server/
+python try_client.py                              # call fetch_error_logs directly
+```
 
 ---
 
-## How it works
+## How It Works
 
 ### Routing
 
@@ -152,12 +220,10 @@ Every question goes to the **Generic Agent** first: it is the front door, and it
 ### MCP server and Dummy API
 
 - `mcp-server/`: a `fastmcp` server with one tool, `fetch_error_logs(tenant_id)`, over Streamable HTTP. It calls the Dummy API.
-- `dummy-api/`: a FastAPI service with one endpoint, `GET /v1/tenants/{tenant_id}/baselines/logs/errors`, that returns the 3 logs in `mock-logs/` as a JSON array.
+- `dummy-api/`: a FastAPI service with one endpoint that returns the 3 logs in `mock-logs/` as a JSON array.
 - `mock-logs/`: 3 realistic Maveric failures (BDT Engine timeout, missing training CSV, BDT worker crash), in the platform's real error log format.
 
----
-
-## When something fails
+### When something fails
 
 | Case | What happens |
 |---|---|
@@ -166,15 +232,53 @@ Every question goes to the **Generic Agent** first: it is the front door, and it
 | No logs in `mock-logs/` | The Dummy API refuses to start |
 | Docs do not cover the question | "The documentation does not cover this." No guessing |
 | MCP server or Dummy API down | "I could not fetch the error logs right now." Docs questions keep working |
-| Debugger answers without reading the logs | The answer is dropped and the user is asked to describe the problem again (a guard in code: no answer without logs) |
+| Debugger answers without reading the logs | The answer is dropped and the user is asked to describe the problem again |
 | Groq rate limit or timeout | 3 retries with waits, then a friendly message |
 | Router or rewrite fails | Falls back to the Generic Agent / the original question |
 
 ---
 
-## Project layout
+## Configuration / API Reference
 
+### Settings (`.env`)
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `GROQ_API_KEY` | string | none (required) | Groq API key |
+| `GROQ_MODEL` | string | none (required) | Groq model, e.g. `openai/gpt-oss-120b` |
+
+
+The MCP server reads `DUMMY_API_URL` (default `http://localhost:8001`) and `MCP_PORT` (default `8002`). The Dummy API reads `LOGS_DIR` (default `mock-logs/`).
+
+### Services and ports
+
+| Service | Port | Address inside Docker | Try it |
+|---|---|---|---|
+| dummy-api | 8001 | `http://dummy-api:8001` | http://localhost:8001/docs |
+| mcp-server | 8002 | `http://mcp-server:8002/mcp` | MCP Inspector: `npx @modelcontextprotocol/inspector`, choose "Streamable HTTP", enter the address |
+
+### MCP tool
+
+| Tool | Argument | Returns |
+|---|---|---|
+| `fetch_error_logs` | `tenant_id` (string; letters, digits, `-`, `_`; up to 64 characters) | The tenant's error logs as JSON text, or a message starting with `ERROR:` if the logs could not be fetched |
+
+### Dummy Error Log API
+
+```http
+GET /v1/tenants/{tenant_id}/baselines/logs/errors
+GET /health
 ```
+
+```bash
+curl http://localhost:8001/v1/tenants/demo-tenant/baselines/logs/errors
+```
+
+---
+
+## Project Layout
+
+```text
 backend/                     ingestion + RAG + agents (one image)
   app/core/                  settings, Groq model
   app/rag/                   chunker, embeddings, ChromaDB, hybrid search, rag_search tool
@@ -192,48 +296,6 @@ docker-compose.ingest.yml    one-off ingestion job
 .env.example                 settings to copy into .env
 ```
 
-### Ports
-
-| Service | Port | Address inside Docker |
-|---|---|---|
-| dummy-api | 8001 | `http://dummy-api:8001` |
-| mcp-server | 8002 | `http://mcp-server:8002/mcp` |
-
-### Settings (`.env`)
-
-| Setting | Default | Meaning |
-|---|---|---|
-| `GROQ_API_KEY` | none (required) | Groq key |
-| `GROQ_MODEL` | none (required) | Groq model, e.g. `openai/gpt-oss-120b` |
-| `MCP_SERVER_URL` | `http://localhost:8002/mcp` | Where the Debugger finds the MCP server. `docker-compose.yml` always sets the Docker address |
-| `DEFAULT_TENANT_ID` | `demo-tenant` | Whose logs the Debugger fetches when the user names no tenant |
-
 ---
-
-## Running without Docker (for development)
-
-Python 3.12 or 3.13. The backend and the MCP server need **separate** virtual environments: `fastmcp` 4 needs `mcp` 2.x, while `langchain-mcp-adapters` needs `mcp` below 2.0. (In Docker each service has its own image, so this does not matter there.)
-
-```powershell
-# Backend (from the project root)
-python -m venv .venv
-.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
-.venv\Scripts\python.exe -m pip install -r dummy-api\requirements.txt
-
-# MCP server
-python -m venv mcp-server\.venv
-mcp-server\.venv\Scripts\python.exe -m pip install -r mcp-server\requirements.txt
-```
-
-Then, each in its own terminal:
-
-```powershell
-cd dummy-api;  ..\.venv\Scripts\python.exe -m uvicorn main:app --port 8001
-cd mcp-server; .\.venv\Scripts\python.exe server.py
-cd backend;    ..\.venv\Scripts\python.exe -m scripts.ingest     # once
-cd backend;    ..\.venv\Scripts\python.exe -m app.cli
-```
-
-Test scripts (from `backend/`): `python -m scripts.search "What is EPIC-8?"`, `python -m scripts.route --samples`, `python -m scripts.debug "The worker crashed"`. From `mcp-server/`: `python try_client.py`.
 
 
